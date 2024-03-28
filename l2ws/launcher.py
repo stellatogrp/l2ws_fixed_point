@@ -66,11 +66,13 @@ class Workspace:
         static_dict holds the data that doesn't change from problem to problem
         example is the string (e.g. 'robust_kalman')
         '''
+        self.algo = algo
         if cfg.get('custom_loss', False):
             if self.algo == 'maml':
                 self.custom_loss = True
             else:
                 self.custom_loss = custom_loss
+            # self.custom_loss = custom_loss
         else:
             self.custom_loss = None
         pac_bayes_cfg = cfg.get('pac_bayes_cfg', {})
@@ -107,7 +109,7 @@ class Workspace:
         # self.pretrain_cfg = cfg.pretrain
         self.key_count = 0
 
-        self.algo = algo
+        
         self.static_flag = static_flag
         self.example = example
         self.eval_unrolls = cfg.eval_unrolls + 1
@@ -907,6 +909,14 @@ class Workspace:
         rounded_priors = self.l2ws_model.round_priors(priors, self.l2ws_model.c, self.l2ws_model.b)
         self.l2ws_model.params[2] = rounded_priors
 
+        sample_conv_penalty = jnp.log(2 / self.l2ws_model.delta2) / num_samples
+        mcallester_penalty = self.l2ws_model.calculate_total_penalty(self.l2ws_model.N_train, 
+                                        self.l2ws_model.params, 
+                                        self.l2ws_model.c,
+                                        self.l2ws_model.b,
+                                        self.l2ws_model.delta
+                                        )
+
         
         for i in range(num_samples):
             eval_out = self.evaluate_only(fixed_ws=False, num=N, train=train, 
@@ -929,13 +939,7 @@ class Workspace:
         '''
 
         
-        sample_conv_penalty = jnp.log(2 / self.l2ws_model.delta2) / num_samples
-        mcallester_penalty = self.l2ws_model.calculate_total_penalty(self.l2ws_model.N_train, 
-                                        self.l2ws_model.params, 
-                                        self.l2ws_model.c,
-                                        self.l2ws_model.b,
-                                        self.l2ws_model.delta
-                                        )
+        
 
         # cache = {}
         # R_star = np.zeros((K, len(self.frac_solved_accs)))
@@ -962,8 +966,12 @@ class Workspace:
                     R_star = invert_kl(1 - frac_solved[j], mcallester_penalty)
 
                 final_pac_bayes_loss = final_pac_bayes_loss.at[j].set(1 - R_star)
+                print('risk', 1 - frac_solved[j], 'R_bar', R_bar, 'R_star', R_star)
+                
 
             final_pac_bayes_frac_solved = jnp.clip(final_pac_bayes_loss, a_min=0)
+                
+                
 
             # update the df
             frac_solved_df_list[i][col] = frac_solved

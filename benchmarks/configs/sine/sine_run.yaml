@@ -57,7 +57,7 @@ skip_startup: False
 sigma_nn: [0.0, 1e-6, 1e-5, 0.0001, 0.001, 0.01, .1, 1, 10]
 # pac_bayes_num_samples: 5
 pac_bayes_flag: False
-load_weights_datetime: '2024-02-26/14-46-35'
+load_weights_datetime: '2024-03-28/10-38-45' #'2024-02-26/14-46-35'
 nn_load_type: stochastic
 
 pac_bayes_cfg:
@@ -67,12 +67,13 @@ pac_bayes_cfg:
   delta: 0.0001
   delta2: 0.00001
   penalty_coeff: 1.0
-  deterministic: True
+  deterministic: False #True
   frac_solved_accs: maml_full #[1.5, 1, 0.5, 0.1]
   target_pen: 0.1
-  skip_full: True
-  pac_bayes_num_samples: 100
+  skip_full: False
+  pac_bayes_num_samples: 10000
 lambd: 0.1
 save_weights_flag: True
 algo: maml
 gamma: 0.01
+custom_loss: True
