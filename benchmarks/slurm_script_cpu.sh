@@ -16,8 +16,8 @@ echo "My SLURM_ARRAY_JOB_ID is $SLURM_ARRAY_JOB_ID."
 echo "My SLURM_ARRAY_TASK_ID is $SLURM_ARRAY_TASK_ID"
 echo "Executing on the machine:" $(hostname)
 
-# python benchmarks/l2ws_setup.py sparse_coding cluster
-python benchmarks/plot.py sparse_coding cluster
+python benchmarks/l2ws_setup.py sine cluster
+# python benchmarks/plot_genL2O.py sparse_coding cluster
 # python benchmarks/l2ws_train.py mnist cluster
 # python l2ws_train_script.py sparse_pca cluster
 # python gif_script.py robust_pca cluster

@@ -2,6 +2,7 @@ import sys
 
 import hydra
 import matplotlib.pyplot as plt
+from matplotlib.ticker import MaxNLocator
 import numpy as np
 import pandas as pd
 import yaml
@@ -303,6 +304,8 @@ def plot_final_classical_risk_bounds_together(example, acc_list, steps, bounds_l
         axes[loc].set_title(title, fontsize=title_fontsize)
         if worst_case:
             axes[k].set_xscale('log')
+        
+        axes[loc].xaxis.set_major_locator(MaxNLocator(integer=True))
     plt.tight_layout()
     plt.savefig("risk_together.pdf", bbox_inches='tight')
     plt.clf()
@@ -731,6 +734,8 @@ def percentile_plots_maml(example, cfg):
     # get the empirical quantiles
     percentiles_list_list = get_percentiles_learned(example, cfg)
 
+    percentiles_list_nn = get_percentiles(example, cfg, first=False)
+
     percentiles_list_cold = get_percentiles(example, cfg)
     
     for i in range(len(percentiles)):
@@ -762,7 +767,7 @@ def percentile_plots_maml(example, cfg):
             emp_list = [percentiles_list_list[k][correct_index][:eval_iters] for k in range(len(percentiles_list_list))]
             # import pdb
             # pdb.set_trace()
-            second_baseline_quantile = None
+            second_baseline_quantile = percentiles_list_nn[i]
 
         learned_percentile_final_plots(example, percentile, cold_start_quantile, second_baseline_quantile, 
                                        worst, emp_list, bounds_list, cfg.custom_loss, 
@@ -775,7 +780,7 @@ def percentile_plots_maml(example, cfg):
         bounds_list_list.append(bounds_list)
         emp_list_list.append(emp_list)
         plot_bool_list_list.append(plot_bool_list)
-    second_baseline_quantile_list = None
+    # second_baseline_quantile_list = None
     learned_percentile_final_plots_together(example, percentiles, cold_start_quantile_list, 
                                             second_baseline_quantile_list,
                                             worst_list, emp_list_list,
@@ -806,12 +811,28 @@ def create_percentile_table(example, percentiles, cold_start_quantile_list,
     df = pd.DataFrame()
 
     df['quantiles'] = np.array(percentiles)
+    algorithms = ['alista', 'tilista', 'glista', 'lista']
 
     if example == 'sparse_coding':
-        ista_vals = np.zeros(percentiles.size)
-        for i in range(cold_start_quantile_list):
-            ista_vals[i] = cold_start_quantile_list[i][-1]
-        df['ista'] = ista_vals
+        index = cold_start_quantile_list[0].size - 1
+        ista_vals = np.zeros(len(percentiles))
+        fista_vals = np.zeros(len(percentiles))
+        for i in range(len(percentiles)):
+            ista_vals[i] = cold_start_quantile_list[i][index]
+            fista_vals[i] = second_baseline_quantile_list[i][index]
+        df['ista'] = np.round(ista_vals, 2)
+        df['fista'] = np.round(fista_vals, 2)
+        
+        for j in range(len(bounds_list_list[0])):
+            algo = algorithms[j]
+            curr_emp_vals = np.zeros(len(percentiles))
+            curr_bound_vals = np.zeros(len(percentiles))
+            for i in range(len(percentiles)):
+                curr_emp_vals[i] = emp_list_list[i][j][index]
+                curr_bound_vals[i] = bounds_list_list[i][j][index]
+        
+            df[f"{algo}_emp"] = np.round(curr_emp_vals, 2)
+            df[f"{algo}_bound"] = np.round(curr_bound_vals, 2)
 
     df.to_csv('quantiles.csv')
 
@@ -868,13 +889,13 @@ def learned_percentile_final_plots_together(example, percentiles, cold_start_qua
                     )
         
         # plot the secondary baseline
-        if second_baseline_quantile_list is not None:
-            axes[loc].plot(second_baseline_quantile_list[k], 
-                        titles_2_colors['nearest_neighbor'], 
-                        linestyle=titles_2_styles['nearest_neighbor'],
-                        marker=titles_2_markers['nearest_neighbor'],
-                        markevery=markevery
-                        )
+        # if second_baseline_quantile_list is not None:
+        #     axes[loc].plot(second_baseline_quantile_list[k], 
+        #                 titles_2_colors['nearest_neighbor'], 
+        #                 linestyle=titles_2_styles['nearest_neighbor'],
+        #                 marker=titles_2_markers['nearest_neighbor'],
+        #                 markevery=markevery
+        #                 )
         
         # plot the worst case
         if not custom_loss and worst is not None:
@@ -887,6 +908,7 @@ def learned_percentile_final_plots_together(example, percentiles, cold_start_qua
             axes[k].set_yscale('log')
         axes[k].set_xlabel('evaluation steps', fontsize=fontsize)
         axes[loc].set_title(r'${}$th quantile bound'.format(percentile), fontsize=title_fontsize)
+        axes[k].xaxis.set_major_locator(MaxNLocator(integer=True))
         
     plt.tight_layout()
     plt.savefig("percentile_together.pdf", bbox_inches='tight')
@@ -921,12 +943,12 @@ def learned_percentile_final_plots(example, percentile, cold_start_quantile, sec
                  markevery=None)
     
     # plot the secondary baseline
-    if second_baseline_quantile is not None:
-        plt.plot(second_baseline_quantile, 
-                    titles_2_colors['nearest_neighbor'], 
-                    linestyle=titles_2_styles['nearest_neighbor'],
-                    marker=titles_2_markers['nearest_neighbor'],
-                    markevery=None)
+    # if second_baseline_quantile is not None:
+    #     plt.plot(second_baseline_quantile, 
+    #                 titles_2_colors['nearest_neighbor'], 
+    #                 linestyle=titles_2_styles['nearest_neighbor'],
+    #                 marker=titles_2_markers['nearest_neighbor'],
+    #                 markevery=None)
 
     # plot the worst case
     # if not custom_loss:
@@ -1038,8 +1060,8 @@ def plot_final_learned_risk_bounds_together(example, plot_acc_list, steps, bound
     title_fontsize = 30
 
     # y-label
-    # ylabel = r'$1 - r_{\mathcal{X}}$'
-    ylabel = r'prob. of reaching $\epsilon$'
+    ylabel = r'$1 - r_{\mathcal{X}}$'
+    # ylabel = r'prob. of reaching $\epsilon$'
     axes[0].set_ylabel(ylabel, fontsize=fontsize)
 
     for k in range(len(plot_acc_list)):
@@ -1106,11 +1128,14 @@ def plot_final_learned_risk_bounds_together(example, plot_acc_list, steps, bound
                 title = r'max Euclidean distance: $\epsilon={}$'.format(acc)
             elif example == 'mnist' or example == 'sparse_coding':
                 title = r'NMSE (dB): $\epsilon={}$'.format(np.round(acc, 1))
+        elif example == 'sparse_coding':
+            title = r'NMSE (dB): $\epsilon={}$'.format(np.round(acc, 1))
         else:
             title = r'fixed-point residual: $\epsilon={}$'.format(acc)
         axes[loc].set_title(title, fontsize=title_fontsize)
         if worst_case:
             axes[k].set_xscale('log')
+        axes[loc].xaxis.set_major_locator(MaxNLocator(integer=True))
     plt.tight_layout()
     plt.savefig("risk_together.pdf", bbox_inches='tight')
     plt.clf()
@@ -1423,7 +1448,11 @@ def determine_scs_or_osqp(example):
 
 def get_percentiles(example, cfg, first=True):
     orig_cwd = hydra.utils.get_original_cwd()
-    percentile_dt = cfg.percentile_datetime
+
+    if first:
+        percentile_dt = cfg.percentile_datetime
+    else:
+        percentile_dt = cfg.nearest_neighbor_datetime
     path = f"{orig_cwd}/outputs/{example}/train_outputs/{percentile_dt}"
     # no_learning_path = f"{orig_cwd}/outputs/{example}/train_outputs/{datetime}/{iters_file}"
 
@@ -1431,12 +1460,14 @@ def get_percentiles(example, cfg, first=True):
     percentiles_list = []
     percentiles = cfg.get('percentiles', [30, 50, 90, 95, 99])
     for i in range(len(percentiles)):
-        filename = f"percentiles/train_{percentiles[i]}.csv"
+        # filename = f"percentiles/train_{percentiles[i]}.csv"
+        filename = f"percentiles/test_{percentiles[i]}.csv"
         df = read_csv(f"{path}/{filename}")
         if first:
             curr_percentile_curve = df['no_train']
         else:
-            curr_percentile_curve = df.iloc[-1]
+            # curr_percentile_curve = df.iloc[-1]
+            curr_percentile_curve = df['nearest_neighbor']
         percentiles_list.append(curr_percentile_curve)
     return percentiles_list
 
@@ -1454,7 +1485,7 @@ def get_percentiles_learned(example, cfg, first=False):
         percentiles_list = []
         percentiles = cfg.get('percentiles', [30, 50, 90, 95, 99])
         for i in range(len(percentiles)):
-            filename = f"percentiles/train_{percentiles[i]}.csv"
+            filename = f"percentiles/test_{percentiles[i]}.csv"
             df = read_csv(f"{path}/{filename}")
             if first:
                 curr_percentile_curve = df['no_train']
