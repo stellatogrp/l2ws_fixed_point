@@ -721,7 +721,7 @@ def percentile_plots_maml(example, cfg):
     num_N = len(all_pac_bayes_results[0])
     e_stars = get_e_stars(all_pac_bayes_results, accuracies, eval_iters)
 
-    percentiles = cfg.get('percentiles', [30, 80, 90]) #[30, 80, 90])
+    percentiles = cfg.get('percentiles', [30, 50, 80, 90]) #[30, 80, 90])
     corrected_indices = [0, 2, 3]
     # worst = z_star_max / np.sqrt(steps1 + 2)
     worst = None
@@ -732,7 +732,7 @@ def percentile_plots_maml(example, cfg):
     emp_list_list = []
 
     # get the empirical quantiles
-    percentiles_list_list = get_percentiles_learned(example, cfg)
+    percentiles_list_list = get_percentiles_learned(example, cfg, percentiles)
 
     if cfg.nearest_neighbor_datetime != '':
         # percentiles_list_nn = get_percentiles(example, cfg, first=False)
@@ -741,7 +741,7 @@ def percentile_plots_maml(example, cfg):
 
     baseline_col = 'last' if example == 'sine' else 'no_learn' 
     percentiles_list_cold = get_percentiles(example, cfg, cfg.percentile_dt, 
-                                            train=False, col=baseline_col)
+                                            train=False, col=baseline_col, percentiles=percentiles)
     
     for i in range(len(percentiles)):
         percentile = percentiles[i]
@@ -756,7 +756,7 @@ def percentile_plots_maml(example, cfg):
                 plot_bool_list.append(False)
             else:
                 plot_bool_list.append(True)
-        correct_index = corrected_indices[i]
+        correct_index = i #corrected_indices[i]
 
         if example == 'sine':
             # pretrain quantile
@@ -1153,18 +1153,19 @@ def plot_final_learned_risk_bounds_together(example, plot_acc_list, steps, bound
 
         acc = round_acc(acc)
         
-        if custom_loss:
-            if example == 'robust_kalman':
-                title = r'max Euclidean distance: $\epsilon={}$'.format(acc)
-            elif example == 'mnist' or example == 'sparse_coding':
-                title = r'NMSE (dB): $\epsilon={}$'.format(np.round(acc, 1))
-        elif example == 'sparse_coding':
+        
+        if example == 'sparse_coding':
             title = r'NMSE (dB): $\epsilon={}$'.format(np.round(acc, 1))
         elif example == 'sine':
             if custom_loss:
                 title = r'Infinity norm: $\epsilon={}$'.format(acc)
             else:
                 title = r'MSE: $\epsilon={}$'.format(acc)
+        elif custom_loss:
+            if example == 'robust_kalman':
+                title = r'max Euclidean distance: $\epsilon={}$'.format(acc)
+            elif example == 'mnist' or example == 'sparse_coding':
+                title = r'NMSE (dB): $\epsilon={}$'.format(np.round(acc, 1))
         else:
             title = r'fixed-point residual: $\epsilon={}$'.format(acc)
         axes[loc].set_title(title, fontsize=title_fontsize)
@@ -1510,7 +1511,7 @@ def determine_scs_or_osqp(example):
 #     return percentiles_list
 
 
-def get_percentiles(example, cfg, percentile_dt, train, col):
+def get_percentiles(example, cfg, percentile_dt, train, col, percentiles):
     orig_cwd = hydra.utils.get_original_cwd()
 
     # if first:
@@ -1525,7 +1526,7 @@ def get_percentiles(example, cfg, percentile_dt, train, col):
 
     # return the first column
     percentiles_list = []
-    percentiles = cfg.get('percentiles', [30, 50, 90, 95, 99])
+    # percentiles = cfg.get('percentiles', [30, 50, 90, 95, 99])
     for i in range(len(percentiles)):
         # filename = f"percentiles/train_{percentiles[i]}.csv"
         if train:
@@ -1545,7 +1546,7 @@ def get_percentiles(example, cfg, percentile_dt, train, col):
     return percentiles_list
 
 
-def get_percentiles_learned(example, cfg, first=False):
+def get_percentiles_learned(example, cfg, percentiles, first=False):
     orig_cwd = hydra.utils.get_original_cwd()
     percentile_dt_list = cfg.percentile_datetime_list
 
@@ -1556,7 +1557,7 @@ def get_percentiles_learned(example, cfg, first=False):
 
         # return the last column
         percentiles_list = []
-        percentiles = cfg.get('percentiles', [30, 50, 90, 95, 99])
+        # percentiles = cfg.get('percentiles', [30, 50, 90, 95, 99])
         for i in range(len(percentiles)):
             filename = f"percentiles/test_{percentiles[i]}.csv"
             df = read_csv(f"{path}/{filename}")
