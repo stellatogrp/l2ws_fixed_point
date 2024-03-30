@@ -85,9 +85,6 @@ def setup_probs(setup_cfg):
     # save output to output_filename
     output_filename = f"{os.getcwd()}/data_setup"
 
-    import pdb
-    pdb.set_trace()
-
     # ista_setup_script(b_mat, A, lambd, output_filename)
     jnp.savez(
         output_filename,

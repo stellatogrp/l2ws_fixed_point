@@ -734,9 +734,14 @@ def percentile_plots_maml(example, cfg):
     # get the empirical quantiles
     percentiles_list_list = get_percentiles_learned(example, cfg)
 
-    percentiles_list_nn = get_percentiles(example, cfg, first=False)
+    if cfg.nearest_neighbor_datetime != '':
+        # percentiles_list_nn = get_percentiles(example, cfg, first=False)
+        percentiles_list_nn = get_percentiles(example, cfg, cfg.percentile_dt, 
+                                              train=False, col='nearest_neighbor')
 
-    percentiles_list_cold = get_percentiles(example, cfg)
+    baseline_col = 'last' if example == 'sine' else 'no_learn' 
+    percentiles_list_cold = get_percentiles(example, cfg, cfg.percentile_dt, 
+                                            train=False, col=baseline_col)
     
     for i in range(len(percentiles)):
         percentile = percentiles[i]
@@ -756,12 +761,12 @@ def percentile_plots_maml(example, cfg):
         if example == 'sine':
             # pretrain quantile
             percentile_results = percentiles_list_list[0]
-            cold_start_quantile = percentile_results[correct_index][:eval_iters]
+            cold_start_quantile = percentiles_list_cold[i] #percentile_results[correct_index][:eval_iters]
             second_baseline_quantile = None
             worst = None
 
             # learned quantile
-            emp_list = [percentiles_list_list[1][correct_index][:eval_iters]]
+            emp_list = [percentiles_list_list[0][correct_index][:eval_iters]]
         elif example == 'sparse_coding':
             cold_start_quantile = percentiles_list_cold[i]
             emp_list = [percentiles_list_list[k][correct_index][:eval_iters] for k in range(len(percentiles_list_list))]
@@ -794,6 +799,11 @@ def percentile_plots_maml(example, cfg):
 def get_ylabel_percentile(example, custom_loss):
     if example == 'sparse_coding':
         return 'NMSE (dB)'
+    if example == 'sine':
+        if custom_loss:
+            return 'Infinity norm'
+        else:
+            return 'MSE'
     if custom_loss:
         if example == 'robust_kalman':
             ylabel = 'max Euclidean dist.'
@@ -801,6 +811,7 @@ def get_ylabel_percentile(example, custom_loss):
             ylabel = 'NMSE (dB)'
     else:
         ylabel = 'fixed-point residual'
+
     return ylabel
 
 
@@ -811,9 +822,10 @@ def create_percentile_table(example, percentiles, cold_start_quantile_list,
     df = pd.DataFrame()
 
     df['quantiles'] = np.array(percentiles)
-    algorithms = ['alista', 'tilista', 'glista', 'lista']
+    
 
     if example == 'sparse_coding':
+        algorithms = ['alista', 'tilista', 'glista', 'lista']
         index = cold_start_quantile_list[0].size - 1
         ista_vals = np.zeros(len(percentiles))
         fista_vals = np.zeros(len(percentiles))
@@ -822,6 +834,24 @@ def create_percentile_table(example, percentiles, cold_start_quantile_list,
             fista_vals[i] = second_baseline_quantile_list[i][index]
         df['ista'] = np.round(ista_vals, 2)
         df['fista'] = np.round(fista_vals, 2)
+        
+        for j in range(len(bounds_list_list[0])):
+            algo = algorithms[j]
+            curr_emp_vals = np.zeros(len(percentiles))
+            curr_bound_vals = np.zeros(len(percentiles))
+            for i in range(len(percentiles)):
+                curr_emp_vals[i] = emp_list_list[i][j][index]
+                curr_bound_vals[i] = bounds_list_list[i][j][index]
+        
+            df[f"{algo}_emp"] = np.round(curr_emp_vals, 2)
+            df[f"{algo}_bound"] = np.round(curr_bound_vals, 2)
+    elif example == 'sine':
+        algorithms = ['maml']
+        index = cold_start_quantile_list[0].size - 1
+        pretrain_vals = np.zeros(len(percentiles))
+        for i in range(len(percentiles)):
+            pretrain_vals[i] = cold_start_quantile_list[i][index]
+        df['pretrain'] = np.round(pretrain_vals, 2)
         
         for j in range(len(bounds_list_list[0])):
             algo = algorithms[j]
@@ -1002,7 +1032,7 @@ def create_gen_l2o_results_maml(example, cfg):
         acc = accs[i]
 
         if acc in plot_acc_list:
-            if example == 'maml':
+            if example == 'sine':
                 # get the pretrained model
                 cold_start_curve = pretrain_results[i]
                 secondary_baseline_curve = None
@@ -1130,6 +1160,11 @@ def plot_final_learned_risk_bounds_together(example, plot_acc_list, steps, bound
                 title = r'NMSE (dB): $\epsilon={}$'.format(np.round(acc, 1))
         elif example == 'sparse_coding':
             title = r'NMSE (dB): $\epsilon={}$'.format(np.round(acc, 1))
+        elif example == 'sine':
+            if custom_loss:
+                title = r'Infinity norm: $\epsilon={}$'.format(acc)
+            else:
+                title = r'MSE: $\epsilon={}$'.format(acc)
         else:
             title = r'fixed-point residual: $\epsilon={}$'.format(acc)
         axes[loc].set_title(title, fontsize=title_fontsize)
@@ -1291,9 +1326,10 @@ def sine_plot_eval_iters(cfg):
     # plot_eval_iters(example, cfg, train=False)
     # create_journal_results(example, cfg, train=False)
     # overlay_training_losses(example, cfg)
-    get_maml_visualization_data(example, cfg)
+    
     create_gen_l2o_results_maml(example, cfg)
     percentile_plots_maml(example, cfg)
+    get_maml_visualization_data(example, cfg)
 
 
 
@@ -1445,14 +1481,45 @@ def determine_scs_or_osqp(example):
     return True
 
 
+# def get_percentiles(example, cfg, first=True):
+#     orig_cwd = hydra.utils.get_original_cwd()
 
-def get_percentiles(example, cfg, first=True):
+#     if first:
+#         if example == 'sine':
+#             percentile_dt = cfg.percentile_datetime
+#         else:
+#             percentile_dt = cfg.percentile_datetime
+#     else:
+#         percentile_dt = cfg.nearest_neighbor_datetime
+#     path = f"{orig_cwd}/outputs/{example}/train_outputs/{percentile_dt}"
+#     # no_learning_path = f"{orig_cwd}/outputs/{example}/train_outputs/{datetime}/{iters_file}"
+
+#     # return the first column
+#     percentiles_list = []
+#     percentiles = cfg.get('percentiles', [30, 50, 90, 95, 99])
+#     for i in range(len(percentiles)):
+#         # filename = f"percentiles/train_{percentiles[i]}.csv"
+#         filename = f"percentiles/test_{percentiles[i]}.csv"
+#         df = read_csv(f"{path}/{filename}")
+#         if first:
+#             curr_percentile_curve = df['no_train']
+#         else:
+#             # curr_percentile_curve = df.iloc[-1]
+#             curr_percentile_curve = df['nearest_neighbor']
+#         percentiles_list.append(curr_percentile_curve)
+#     return percentiles_list
+
+
+def get_percentiles(example, cfg, percentile_dt, train, col):
     orig_cwd = hydra.utils.get_original_cwd()
 
-    if first:
-        percentile_dt = cfg.percentile_datetime
-    else:
-        percentile_dt = cfg.nearest_neighbor_datetime
+    # if first:
+    #     if example == 'sine':
+    #         percentile_dt = cfg.percentile_datetime
+    #     else:
+    #         percentile_dt = cfg.percentile_datetime
+    # else:
+    #     percentile_dt = cfg.nearest_neighbor_datetime
     path = f"{orig_cwd}/outputs/{example}/train_outputs/{percentile_dt}"
     # no_learning_path = f"{orig_cwd}/outputs/{example}/train_outputs/{datetime}/{iters_file}"
 
@@ -1461,13 +1528,19 @@ def get_percentiles(example, cfg, first=True):
     percentiles = cfg.get('percentiles', [30, 50, 90, 95, 99])
     for i in range(len(percentiles)):
         # filename = f"percentiles/train_{percentiles[i]}.csv"
-        filename = f"percentiles/test_{percentiles[i]}.csv"
-        df = read_csv(f"{path}/{filename}")
-        if first:
-            curr_percentile_curve = df['no_train']
+        if train:
+            filename = f"percentiles/train_{percentiles[i]}.csv"
         else:
-            # curr_percentile_curve = df.iloc[-1]
-            curr_percentile_curve = df['nearest_neighbor']
+            filename = f"percentiles/test_{percentiles[i]}.csv"
+        df = read_csv(f"{path}/{filename}")
+        if col == 'last':
+            curr_percentile_curve = df.iloc[:, -1]
+        else:
+            curr_percentile_curve = df[col]
+        #     curr_percentile_curve = df['no_train']
+        # else:
+        #     # 
+        #     curr_percentile_curve = df['nearest_neighbor']
         percentiles_list.append(curr_percentile_curve)
     return percentiles_list
 

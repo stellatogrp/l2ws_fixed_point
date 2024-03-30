@@ -22,7 +22,7 @@ echo "Executing on the machine:" $(hostname)
 # export xla_force_host_platform_device_count=1
 
 
-python benchmarks/l2ws_train.py sparse_coding cluster
+python benchmarks/l2ws_train.py sine cluster
 # python l2ws_train_script.py robust_kalman cluster
 # python aggregate_slurm_runs_script.py robust_ls cluster
 
