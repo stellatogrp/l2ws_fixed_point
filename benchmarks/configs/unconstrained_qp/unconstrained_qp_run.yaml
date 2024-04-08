@@ -26,13 +26,13 @@ data:
   datetime: ''
 
 train_unrolls: 15
-eval_unrolls: 1000
+eval_unrolls: 700
 eval_every_x_epochs: 100
 save_every_x_epochs: 1
 test_every_x_epochs: 1
 write_csv_every_x_batches: 1
 epochs_jit: 2
-N_train: 100000
+N_train: 50000
 N_test: 1000
 num_samples: 1000
 prediction_variable: w
@@ -51,18 +51,22 @@ accuracies: [.1, .01, .001, .0001]
 rho_x: 1
 scale: 1
 alpha_relax: 1
-skip_startup: False
+skip_startup: False #True
 
 save_weights_flag: True
-# load_weights_datetime: '2024-01-01/15-19-18'
-# nn_load_type: deterministic
+load_weights_datetime: '2024-04-03/12-00-03' #'2024-03-30/11-47-25'
+nn_load_type: stochastic
 
 pac_bayes_cfg:
   init_var: 1e-2 #1e-2
-  c: 10.0
+  c: 100.0
   b: 100
-  delta: 0.01
+  delta: 0.00001
+  delta2: 0.00001
   rep: False
   deterministic: False
   penalty_coeff: 1.0
-  target_pen: 0.05
+  target_pen: 0.03
+  skip_full: False
+  pac_bayes_num_samples: 2000 #750
+  frac_solved_accs: fp_full #[0.001, 0.0001] #

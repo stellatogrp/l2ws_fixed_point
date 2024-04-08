@@ -9,7 +9,7 @@ from jax.tree_util import tree_map
 
 from l2ws.utils.generic_utils import python_fori_loop, unvec_symm, vec_symm
 
-TAU_FACTOR = 10
+TAU_FACTOR = 1 #10
 
 
 # def fixed_point_extragrad(z, Q, R, A, c, b, eg_step):
@@ -1320,7 +1320,7 @@ def get_scale_vec(rho_x, scale, m, n, zero_cone_size, hsde=True):
 
     # zero cone of y-component of scale_vec set to 1 / (1000 * scale)
     if hsde:
-        zero_scale_factor = 1000
+        zero_scale_factor = 1 #1000
     else:
         zero_scale_factor = 1
     scale_vec = scale_vec.at[n:n + zero_cone_size].set(1 / (zero_scale_factor * scale))

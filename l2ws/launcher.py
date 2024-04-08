@@ -902,7 +902,8 @@ class Workspace:
         '''
         K = self.l2ws_model.eval_unrolls
         N = self.l2ws_model.N_train if train else self.l2ws_model.N_test
-        hist = np.zeros((num_samples, N, K-1))
+        # hist = np.zeros((num_samples, N, K-1))
+        # hist = np.zeros((num_samples, K-1))
 
         # round the priors
         priors = self.l2ws_model.params[2]
@@ -917,19 +918,32 @@ class Workspace:
                                         self.l2ws_model.delta
                                         )
 
-        
+        sum_frac_solved = np.zeros((K - 1, len(self.frac_solved_accs)))
+        all_losses = []
         for i in range(num_samples):
             eval_out = self.evaluate_only(fixed_ws=False, num=N, train=train, 
                                           col='pac_bayes', batch_size=N)
             loss_train, out_train, train_time = eval_out
-
-            hist[i, :, :] = out_train[1]
+            losses_over_examples = out_train[1].T
+            if i < 20:
+                all_losses.append(losses_over_examples.T)
             self.l2ws_model.key += 1
 
+            for j in range(len(self.frac_solved_accs)):
+                fs = (out_train[1] < self.frac_solved_accs[j])
+                frac_solved = fs.sum(axis=0) #fs.mean(axis=0)
+                sum_frac_solved[:, j] += frac_solved
+        mean_frac_solved = sum_frac_solved / (N * num_samples)
+            # hist[i, :, :] = out_train[1]
+            # hist[i, :] = out_train[1].mean(axis=0)
+            
+
         col = "train_epoch_0"
+
         # enter the percentiles
-        losses_over_examples = out_train[1].T
-        self.update_percentiles(losses_over_examples.T, train, col)
+        # losses_over_examples = out_train[1].T
+        # self.update_percentiles(losses_over_examples.T, train, col)
+        self.update_percentiles(np.vstack(all_losses), train, col)
 
         '''
         part 2: finalize by looping over steps and tolerances  
@@ -938,12 +952,8 @@ class Workspace:
         2.3: McAllester bound
         '''
 
-        
-        
 
-        # cache = {}
-        # R_star = np.zeros((K, len(self.frac_solved_accs)))
-        frac_solved_list = []
+        # frac_solved_list = []
         if train:
             frac_solved_df_list = self.frac_solved_df_list_train
         else:
@@ -951,22 +961,25 @@ class Workspace:
 
         for i in range(len(self.frac_solved_accs)):
             # 2.1: compute frac solved
-            fs = (out_train[1] < self.frac_solved_accs[i])
-            frac_solved = fs.mean(axis=0)
-            frac_solved_list.append(frac_solved)
+            # fs = (out_train[1] < self.frac_solved_accs[i])
+            # frac_solved = fs.mean(axis=0)
+            # frac_solved_list.append(frac_solved)
+            frac_solved = mean_frac_solved[:, i]
             final_pac_bayes_loss = jnp.zeros(frac_solved.size)
             for j in range(frac_solved.size):
                 # 2.2: sample convergence bound
-                R_bar = invert_kl(1 - frac_solved[j], sample_conv_penalty)
+                # R_bar = invert_kl(1 - frac_solved[j], sample_conv_penalty)
+                R_bar = invert_kl(1 - mean_frac_solved[j, i], sample_conv_penalty)
 
                 # 2.3: McAllester
                 if train:
                     R_star = invert_kl(R_bar, mcallester_penalty)
                 else:
-                    R_star = invert_kl(1 - frac_solved[j], mcallester_penalty)
+                    # R_star = invert_kl(1 - frac_solved[j], mcallester_penalty)
+                    R_star = invert_kl(1 - mean_frac_solved[j, i], mcallester_penalty)
 
                 final_pac_bayes_loss = final_pac_bayes_loss.at[j].set(1 - R_star)
-                print('risk', 1 - frac_solved[j], 'R_bar', R_bar, 'R_star', R_star)
+                # print('risk', 1 - frac_solved[j], 'R_bar', R_bar, 'R_star', R_star)
                 
 
             final_pac_bayes_frac_solved = jnp.clip(final_pac_bayes_loss, a_min=0)
@@ -2083,8 +2096,8 @@ class Workspace:
         # key_count updated to get random permutation for each epoch
         # key_count = 0
         if not self.skip_pac_bayes_full:
-            self.finalize_genL2O(train=False, num_samples=100)
             self.finalize_genL2O(train=True, num_samples=self.pac_bayes_num_samples)
+            self.finalize_genL2O(train=False, num_samples=500)
             return
 
         if self.pac_bayes_hyperparameter_opt_flag:
@@ -2520,7 +2533,7 @@ class Workspace:
         self.conv_rates_df = pd.DataFrame()
         self.conv_rates_df['conv_rate'] = self.conv_rates
 
-        self.percentiles = [30, 50, 80, 90, 95, 99]
+        self.percentiles = [10, 20, 30, 40, 50, 60, 70, 80, 90, 95, 96, 97, 98, 99] #[30, 50, 80, 90, 95, 99]
         self.percentiles_df_list_train = []
         self.percentiles_df_list_test = []
         for i in range(len(self.percentiles)):

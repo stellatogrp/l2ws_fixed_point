@@ -33,10 +33,10 @@ test_every_x_epochs: 1
 write_csv_every_x_batches: 1
 epochs_jit: 2
 N_train: 50000
-N_test: 1000
+N_test: 100
 # num_samples: 1000
-num_samples_train: 1000
-num_samples_test: 1000
+num_samples_train: 100
+num_samples_test: 100
 prediction_variable: w
 angle_anchors: [0]
 supervised: True
@@ -57,7 +57,7 @@ skip_startup: False
 sigma_nn: [0.0, 1e-6, 1e-5, 0.0001, 0.001, 0.01, .1, 1, 10]
 pac_bayes_num_samples: 5
 pac_bayes_flag: False
-load_weights_datetime: '2024-03-05/17-42-37'
+load_weights_datetime: '2024-03-05/14-37-53'
 # # lista: '2024-03-05/14-50-17', tilista: '2024-03-05/14-37-53', glista: '2024-03-05/17-42-37', # alista '2024-03-04/23-45-24'
 nn_load_type: stochastic
 
@@ -65,7 +65,7 @@ pac_bayes_cfg:
   init_var: 1e-2
   c: 100.0
   b: 100
-  delta: 0.0001
+  delta: 0.00001
   delta2: 0.00001
   rep: True
   penalty_coeff: 1.0
@@ -73,7 +73,7 @@ pac_bayes_cfg:
   frac_solved_accs: nmse_full #[-10, -20, -30]
   target_pen: 0.01
   skip_full: False
-  pac_bayes_num_samples: 1000
+  pac_bayes_num_samples: 20000 #20000
 lambd: 0.1
 save_weights_flag: True
-algo: glista
+algo: tilista

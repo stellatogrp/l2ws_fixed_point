@@ -26,7 +26,7 @@ data:
   datetime: ''
 
 
-eval_unrolls: 200
+eval_unrolls: 500
 eval_every_x_epochs: 10
 save_every_x_epochs: 1
 test_every_x_epochs: 10
@@ -73,10 +73,10 @@ pac_bayes_cfg:
   b: 100
   delta: 0.0001
   rep: True
-  penalty_coeff: 0.6
+  penalty_coeff: 1.0
   deterministic: False
   target_pen: 0.3
-  frac_solved_accs: [0.1, 0.01, 0.001, 0.0001] #fp_full #fp_full #[0.1, 0.01, 0.03, 0.001, 0.0001]
+  frac_solved_accs: fp_full #[0.1, 0.01, 0.001, 0.0001] #fp_full #fp_full #[0.1, 0.01, 0.03, 0.001, 0.0001]
 
 # output_datetimes: 
 # 8/2
@@ -92,4 +92,4 @@ pac_bayes_cfg:
 #60: '2023-05-22/15-29-14'
 #120: '2023-05-22/16-37-55'
 #1: '2023-05-22/16-43-06'
-custom_loss: False
+custom_loss: True #False

@@ -25,14 +25,14 @@ pretrain:
 data:
   datetime: ''
 
-train_unrolls: 0
+train_unrolls: 2
 eval_unrolls: 10
 eval_every_x_epochs: 50
 save_every_x_epochs: 1
 test_every_x_epochs: 1
 write_csv_every_x_batches: 1
 epochs_jit: 2
-N_train: 10000
+N_train: 50000
 N_test: 100
 num_samples: 100
 # num_samples_train: 1000
@@ -57,23 +57,23 @@ skip_startup: False
 sigma_nn: [0.0, 1e-6, 1e-5, 0.0001, 0.001, 0.01, .1, 1, 10]
 # pac_bayes_num_samples: 5
 pac_bayes_flag: False
-# load_weights_datetime: '2024-03-28/15-27-49' #'2024-03-28/10-38-45' #'2024-02-26/14-46-35'
-# nn_load_type: stochastic
+load_weights_datetime: '2024-04-01/21-25-18' #'2024-03-28/10-38-45' #'2024-02-26/14-46-35'
+nn_load_type: stochastic
 
 pac_bayes_cfg:
   init_var: 1e-2
   c: 100.0
   b: 100
-  delta: 0.0001
+  delta: 0.00001
   delta2: 0.00001
   penalty_coeff: 1.0
-  deterministic: True
+  deterministic: False #True
   frac_solved_accs: maml_full #[1.5, 1, 0.5, 0.1]
-  target_pen: 0.1
-  skip_full: True #False
-  pac_bayes_num_samples: 10000
+  target_pen: 0.05
+  skip_full: False
+  pac_bayes_num_samples: 20000
 lambd: 0.1
 save_weights_flag: True
 algo: maml
 gamma: 0.01
-custom_loss: False
+custom_loss: True

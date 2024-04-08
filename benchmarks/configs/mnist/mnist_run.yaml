@@ -31,9 +31,9 @@ test_every_x_epochs: 1
 write_csv_every_x_batches: 1
 epochs_jit: 2
 
-N_train: 1000
-N_test: 1000
-num_samples: 1000
+N_train: 10
+N_test: 10
+num_samples: 10
 
 
 prediction_variable: w
@@ -53,7 +53,9 @@ alpha_relax: 1
 
 
 
-# eval_batch_size: 100
+# eval_batch_size: 10
+# eval_batch_size_test: 50
+# eval_batch_size_train: 50
 
 
 
@@ -72,7 +74,7 @@ iterates_visualize: [10, 20, 50, 90, 200, 300, 500, 1000] #[10, 20, 50, 100, 200
 vis_num: 0
 skip_startup: False
 
-eval_unrolls: 3500
+eval_unrolls: 16000
 solve_c_num: 0
 supervised: True
 train_unrolls: 5
@@ -96,9 +98,9 @@ pac_bayes_cfg:
   penalty_coeff: 1.0
   deterministic: False
   target_pen: 0.3
-  frac_solved_accs: nmse_full # [0.001, 0.01, 0.1, 1.0] # fp_full
+  frac_solved_accs: fp_full #nmse_full # [0.001, 0.01, 0.1, 1.0] # fp_full
 
-custom_loss: True
+custom_loss: False #True
 
 # output_datetimes: 
 # fp: ['2023-09-01/14-20-37', 
