@@ -17,7 +17,7 @@ echo "My SLURM_ARRAY_TASK_ID is $SLURM_ARRAY_TASK_ID"
 echo "Executing on the machine:" $(hostname)
 
 # python benchmarks/l2ws_setup.py robust_kalman cluster
-python benchmarks/plot_genL2O.py mnist cluster
+python benchmarks/plot_genL2O.py robust_kalman cluster
 # python benchmarks/l2ws_train.py mnist cluster
 # python l2ws_train_script.py sparse_pca cluster
 # python gif_script.py robust_pca cluster

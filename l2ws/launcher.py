@@ -533,7 +533,8 @@ class Workspace:
             rho_vec = jnp.ones(m)
             l0 = self.q_mat_train[0, n: n + m]
             u0 = self.q_mat_train[0, n + m: n + 2 * m]
-            rho_vec = rho_vec.at[l0 == u0].set(1000)
+            # rho_vec = rho_vec.at[l0 == u0].set(1000)
+            rho_vec = rho_vec.at[l0 == u0].set(1)
 
             t0 = time.time()
 
@@ -2058,12 +2059,15 @@ class Workspace:
         self.pretrain_on = self.pretrain_cfg.pretrain_iters > 0
 
         if not self.skip_startup:
-            # no learning evaluation
-            self.eval_iters_train_and_test('no_train', False)
-
             # fixed ws evaluation
             if self.l2ws_model.z_stars_train is not None and self.l2ws_model.algo != 'maml':
                 self.eval_iters_train_and_test('nearest_neighbor', False)
+
+                
+            # no learning evaluation
+            self.eval_iters_train_and_test('no_train', False)
+
+            
 
             # prev sol eval
             if self.prev_sol_eval and self.l2ws_model.z_stars_train is not None:
@@ -2248,7 +2252,7 @@ class Workspace:
         df_acc.to_csv(f"{accs_path}/{col}/accuracies.csv")
 
         # save no learning accuracies
-        if col == 'no_train':
+        if not hasattr(self, 'no_learning_accs'): #col == 'no_train':
             self.no_learning_accs = int_iter_vals
 
         # percent reduction
@@ -2263,9 +2267,10 @@ class Workspace:
 
     def eval_iters_train_and_test(self, col, pretrain_on):
         self.evaluate_iters(
-            self.num_samples_train, col, train=True, plot_pretrain=pretrain_on)
-        self.evaluate_iters(
             self.num_samples_test, col, train=False, plot_pretrain=pretrain_on)
+        self.evaluate_iters(
+            self.num_samples_train, col, train=True, plot_pretrain=pretrain_on)
+        
         
 
     def write_train_results(self, loop_size, prev_batches, epoch_train_losses,

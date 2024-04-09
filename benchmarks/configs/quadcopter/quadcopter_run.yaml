@@ -54,16 +54,27 @@ save_weights_flag: true
 supervised: true
 # eval_batch_size_test: 100
 solve_c_num: 0
-N_train: 10000
+N_train: 1000
 N_test: 1000
 # num_samples: 1000
 num_samples_train: 100
 num_samples_test: 100
 train_unrolls: 5
-eval_unrolls: 500
+eval_unrolls: 200
 # load_weights_datetime: '2023-07-30/23-40-17' #'2023-07-09/14-14-53' #'2023-07-09/15-38-54' #'2023-07-09/14-35-29' #2023-07-09/14-14-53
-num_rollouts: 5
+num_rollouts: 0 #5
 closed_loop_budget: 15
 
 # reg: ['2023-07-09/14-14-53', '2023-07-09/14-27-54', '2023-07-09/14-32-59', '2023-07-09/14-33-59', '2023-08-22/03-07-27']
 # fp: ['2023-07-09/15-06-38', '2023-07-09/15-23-01', '2023-07-09/15-35-15', '2023-08-22/10-25-00', '2023-07-09/15-40-50']
+
+pac_bayes_cfg:
+  init_var: 1e-3
+  c: 10.0
+  b: 100
+  delta: 0.0001
+  rep: True
+  penalty_coeff: 1.0
+  deterministic: True
+  target_pen: 0.3
+  frac_solved_accs: fp_full

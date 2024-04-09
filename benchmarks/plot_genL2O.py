@@ -150,7 +150,7 @@ def worst_case_gap_plot(example, cfg):
     # get the worst case results
     z_star_max, theta_max = get_worst_case_datetime(example, cfg)
     steps = np.arange(cold_start.size)
-    worst_case = z_star_max / np.sqrt(steps + 2)
+    worst_case = z_star_max / np.sqrt((steps + 2) / np.exp(1))
     plt.plot(worst_case, linestyle=titles_2_styles['nearest_neighbor'], 
                  color=titles_2_colors['nearest_neighbor'],
                  marker=titles_2_markers['nearest_neighbor'],
@@ -177,18 +177,14 @@ def get_steps(cold_start_size, eval_iters, worst_case):
 
 
 def construct_worst(z_star_max, steps, lin_conv_rate):
-    avg = 1 / np.sqrt(steps + 2) * z_star_max * 1.1
+    avg = 1 / np.sqrt((steps + 2) / np.exp(1)) * z_star_max * 1.1
     worst = avg
     for i in range(1, steps.size):
         worst[i] = min(worst[i], worst[i-1] * lin_conv_rate ** (steps[i] - steps[i - 1]))
     return worst
 
 
-def get_worse_indices(z_star_max, steps, acc):
-    # worst-case bounds
-    # worst_case_indices = 1 / np.sqrt(steps + 2) * z_star_max * 1.1 < acc
-    # return worst_case_indices
-    lin_conv_rate = 0.99991
+def get_worse_indices(z_star_max, steps, acc, lin_conv_rate):
     worst = construct_worst(z_star_max, steps, lin_conv_rate)
     worst_case_indices = worst < acc
     return worst_case_indices
@@ -228,7 +224,11 @@ def risk_plots(example, cfg):
 
     for i in range(len(accuracies)):
         acc = accuracies[i]
-        worst_case_indices = get_worse_indices(z_star_max, steps, acc)
+        if example == 'mnist':
+            lin_conv_rate = 0.99995
+        elif example == 'robust_kalman':
+            lin_conv_rate = 1.0
+        worst_case_indices = get_worse_indices(z_star_max, steps, acc, lin_conv_rate)
         if cfg.worst_case:
             cold_start_curve = construct_full_curve(cold_start_results[i], steps, worst_case_indices)
         else:
@@ -434,11 +434,14 @@ def percentile_plots(example, cfg):
     percentiles = cfg.get('percentiles', [30, 90, 99])
     corrected_indices = [0, 1, 2] #[0, 2, 4]
 
-    worst = construct_worst(z_star_max, steps1, 0.99995)
+    if example == 'mnist':
+        lin_conv_rate = 0.99995
+    elif example == 'robust_kalman':
+        lin_conv_rate = 1.0
+    worst = construct_worst(z_star_max, steps1, lin_conv_rate)
 
     steps = get_steps(steps1.size, cfg.worst_case_iters, worst_case=True)
-    worst_full = construct_worst(z_star_max, steps, 0.99995)
-    # worst = z_star_max / np.sqrt(steps1 + 2)
+    worst_full = construct_worst(z_star_max, steps, lin_conv_rate)
 
     cold_start_quantile_list, worst_list = [], []
     worst_full_list = []
@@ -468,7 +471,7 @@ def percentile_plots(example, cfg):
         plot_bool_list_list.append(plot_bool_list)
     percentile_final_plots_together(example, percentiles, cold_start_quantile_list, worst_list, 
                             bounds_list_list, cfg.custom_loss, plot_bool_list_list)
-    create_tables_classical(example, percentiles, cold_start_quantile_list, 
+    create_tables_classical(example, steps, percentiles, cold_start_quantile_list, 
                             worst_full_list, bounds_list_list, cfg.custom_loss)
 
 
@@ -760,7 +763,6 @@ def percentile_plots_maml(example, cfg):
     plot_percentiles = cfg.get('plot_percentiles', [30, 80, 90])
     plot_indices = cfg.get('plot_indices', [0, 1, 2]) #[1, 4, 5]
     # corrected_indices = [0, 2, 3]
-    # worst = z_star_max / np.sqrt(steps1 + 2)
     worst = None
 
     cold_start_quantile_list, second_baseline_quantile_list = [], []
@@ -864,7 +866,7 @@ def get_ylabel_percentile(example, custom_loss):
     return ylabel
 
 
-def create_tables_classical(example, percentiles, cold_start_quantile_list, 
+def create_tables_classical(example, steps, percentiles, cold_start_quantile_list, 
                             worst_list, bounds_list_list, custom_loss):
     num_N = len(bounds_list_list)
     num_samples = [10, 100, 1000]
@@ -892,7 +894,12 @@ def create_tables_classical(example, percentiles, cold_start_quantile_list,
         samples_curve_list = [np.zeros(tols.size) for i in range(num_N)]
         for j in range(tols.size):
             cold_start_vals[j] = get_cutoff_tol(cold_start_curve, tols[j])
-            worst_vals[j] = get_cutoff_tol(worst_curve, tols[j])
+
+            worst_cutoff = get_cutoff_tol(worst_curve, tols[j])
+            print('worst_cutoff', worst_cutoff)
+            print('steps', steps)
+            if worst_cutoff is not None:
+                worst_vals[j] = steps[worst_cutoff]
 
             # iterate over the bounds
             

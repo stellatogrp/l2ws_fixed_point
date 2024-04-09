@@ -52,6 +52,8 @@ class OSQPmodel(L2WSmodel):
             self.factors_train = input_dict['factors_train']
             self.factors_test = input_dict['factors_test']
 
+            
+
         # self.k_steps_train_fn = partial(k_steps_train_osqp, factor=factor, A=self.A, rho=rho, 
         #                                 sigma=sigma, jit=self.jit)
         # self.k_steps_eval_fn = partial(k_steps_eval_osqp, factor=factor, P=self.P, A=self.A, 

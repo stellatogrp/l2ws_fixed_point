@@ -195,13 +195,15 @@ class L2WSmodel(object):
             # batch_factors = self.factors[batch_indices, :, :]
             batch_factors = (self.factors_train[0][batch_indices,
                              :, :], self.factors_train[1][batch_indices, :])
+            key = state.iter_num
             results = self.optimizer.update(params=params,
                                             state=state,
                                             inputs=batch_inputs,
                                             b=batch_q_data,
                                             iters=self.train_unrolls,
                                             z_stars=batch_z_stars,
-                                            factors=batch_factors)
+                                            factors=batch_factors,
+                                            key=key)
         else:
             # for either of the following cases
             #   1. factors needed, but are the same for all problems
@@ -222,7 +224,7 @@ class L2WSmodel(object):
     def evaluate(self, k, inputs, b, z_stars, fixed_ws, factors=None, tag='test', light=False):
         if self.factors_required and not self.factor_static_bool:
             return self.dynamic_eval(k, inputs, b, z_stars, 
-                                     factors=factors, tag=tag, fixed_ws=fixed_ws)
+                                     factors=factors, key=self.key, tag=tag, fixed_ws=fixed_ws)
         else:
             return self.static_eval(k, inputs, b, z_stars, self.key, tag=tag, 
                                     fixed_ws=fixed_ws, light=light)
@@ -235,7 +237,8 @@ class L2WSmodel(object):
                                                                    self.test_inputs,
                                                                    self.q_mat_test,
                                                                    z_stars_test,
-                                                                   factors=self.factors_test)
+                                                                   factors=self.factors_test,
+                                                                   key=self.key)
         else:
             test_loss, test_out, time_per_prob = self.static_eval(self.train_unrolls,
                                                                   self.test_inputs,
@@ -248,7 +251,7 @@ class L2WSmodel(object):
         time_per_iter = time_per_prob / self.train_unrolls
         return test_loss, time_per_iter
 
-    def dynamic_eval(self, k, inputs, b, z_stars, factors, tag='test', fixed_ws=False):
+    def dynamic_eval(self, k, inputs, b, z_stars, factors, key, tag='test', fixed_ws=False):
         if fixed_ws:
             curr_loss_fn = self.loss_fn_fixed_ws
         else:
@@ -257,7 +260,7 @@ class L2WSmodel(object):
 
         test_time0 = time.time()
 
-        loss, out = curr_loss_fn(self.params, inputs, b, k, z_stars, factors)
+        loss, out = curr_loss_fn(self.params, inputs, b, k, z_stars, key, factors)
         time_per_prob = (time.time() - test_time0)/num_probs
 
         return loss, out, time_per_prob
@@ -371,7 +374,8 @@ class L2WSmodel(object):
                                                    b=q_init,
                                                    iters=self.train_unrolls,
                                                    z_stars=z_stars_init,
-                                                   factors=batch_factors
+                                                   factors=batch_factors,
+                                                   key=self.key
                                                    )
         else:
             self.state = self.optimizer.init_state(init_params=self.params,
@@ -584,36 +588,40 @@ class L2WSmodel(object):
             #                     in_axes=(None, 0, 0, 0, None, 0),
             #                     out_axes=out_axes)
             batch_predict = vmap(predict,
-                                 in_axes=(None, 0, 0, None, 0, (0, 0)),
+                                 in_axes=(None, 0, 0, None, 0, None, (0, 0)),
                                  out_axes=out_axes)
-
+            # batch_predict = vmap(predict,
+            #                      in_axes=(None, 0, 0, None, 0, (0, 0), None),
+            #                      out_axes=out_axes)
             @partial(jit, static_argnums=(3,))
-            def loss_fn(params, inputs, b, iters, z_stars, factors):
+            def loss_fn(params, inputs, b, iters, z_stars, key, factors):
                 if diff_required:
-                    losses = batch_predict(params, inputs, b, iters, z_stars, factors)
+                    losses = batch_predict(params, inputs, b, iters, z_stars, key, factors)
                     return losses.mean()
                 else:
                     predict_out = batch_predict(
-                        params, inputs, b, iters, z_stars, factors)
+                        params, inputs, b, iters, z_stars, key, factors)
                     losses = predict_out[0]
                     # loss_out = losses, iter_losses, angles, z_all
                     return losses.mean(), predict_out
+
+            # @partial(jit, static_argnums=(3,))
+            # def loss_fn(params, inputs, b, iters, z_stars, factors):
+            #     if diff_required:
+            #         losses = batch_predict(params, inputs, b, iters, z_stars, factors)
+            #         return losses.mean()
+            #     else:
+            #         predict_out = batch_predict(
+            #             params, inputs, b, iters, z_stars, factors)
+            #         losses = predict_out[0]
+            #         # loss_out = losses, iter_losses, angles, z_all
+            #         return losses.mean(), predict_out
         else:
             # for either of the following cases
             #   1. no factors are needed (pass in None as a static argument)
             #   2. factor is constant for all problems (pass in the same factor as static argument)
             predict_partial = partial(predict, factor=self.factor_static)
-            # if diff_required:
-            #     in_axes=(None, 0, 0, None, 0, None)
-            #     def batch_predict(*args):
-            #         return manual_vmap(predict_partial,
-            #                         in_axes,
-            #                         out_axes,
-            #                         *args)
-            # else:
-            #     batch_predict = vmap(predict_partial,
-            #                         in_axes=(None, 0, 0, None, 0, None),
-            #                         out_axes=out_axes)
+
             batch_predict = vmap(predict_partial,
                                     in_axes=(None, 0, 0, None, 0, None),
                                     out_axes=out_axes)
@@ -625,13 +633,7 @@ class L2WSmodel(object):
                     losses = batch_predict(params, inputs, b, iters, z_stars, key)
                     # return losses.mean()
                     q = losses.mean() / self.penalty_coeff
-                    # if self.algo == 'tilista':
-                    #     penalty_loss = calculate_total_penalty(self.N_train, params, self.b, self.c, 
-                    #                                     self.delta,
-                    #                                     prior=self.W)
-                    # else:
-                    #     penalty_loss = calculate_total_penalty(self.N_train, params, self.b, self.c, 
-                    #                                     self.delta)
+
                     penalty_loss = self.calculate_total_penalty(self.N_train, params, self.b, 
                                                                 self.c, 
                                                                 self.delta)
@@ -644,9 +646,7 @@ class L2WSmodel(object):
                     else:
                         factor = 0.1
                     q_expit = 1 / (1 + jnp.exp(-factor * (q - 0)))
-                    # q_expit = 1 / (1 + jnp.exp(-1 * (q - 0)))
-                    # import pdb
-                    # pdb.set_trace()
+
                     out = bisec.run(q=q_expit, c=penalty_loss)
                     r = out.params
                     p = (1 - q_expit) * r + q_expit
