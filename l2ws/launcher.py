@@ -1282,8 +1282,15 @@ class Workspace:
         else:
             jnp_load_obj = jnp.load(filename)
             q_mat = jnp.array(load_npz(f"{filename[:-4]}_q.npz").todense())
-            self.q_mat_train = q_mat[:N_train, :]
-            self.q_mat_test = q_mat[N_train:N, :]
+
+            # randomize for quadcopter
+            # self.q_mat_train = q_mat[:N_train, :]
+            # self.q_mat_test = q_mat[N_train:N, :]
+            train_indices = np.random.choice(q_mat.shape[0], N_train, replace=False)
+            self.q_mat_train = q_mat[train_indices, :]
+
+            test_indices = np.random.choice(q_mat.shape[0], N - N_train, replace=False)
+            self.q_mat_test = q_mat[test_indices, :]
 
             # load factors
             # factors0, factors1 = jnp_load_obj['factors0'], jnp_load_obj['factors1']
@@ -1443,7 +1450,7 @@ class Workspace:
             #                         self.l2ws_model.delta,
             #                         prior=self.l2ws_model.prior
             #                         )
-            if col == 'no_train':
+            if col in ['no_train', 'nearest_neighbor']:
                 penalty = jnp.log(2 / self.l2ws_model.delta) / self.l2ws_model.N_train
             else:
                 penalty = self.l2ws_model.calculate_total_penalty(self.l2ws_model.N_train, 
@@ -2059,14 +2066,17 @@ class Workspace:
         self.pretrain_on = self.pretrain_cfg.pretrain_iters > 0
 
         if not self.skip_startup:
+            
+            
+
             # fixed ws evaluation
             if self.l2ws_model.z_stars_train is not None and self.l2ws_model.algo != 'maml':
                 self.eval_iters_train_and_test('nearest_neighbor', False)
 
-                
             # no learning evaluation
             self.eval_iters_train_and_test('no_train', False)
-
+            
+            
             
 
             # prev sol eval

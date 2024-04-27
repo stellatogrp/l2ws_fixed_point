@@ -22,7 +22,8 @@ plt.rcParams.update({
 cmap = plt.cm.Set1
 colors = cmap.colors
 titles_2_colors = dict(cold_start='black', 
-                       nearest_neighbor=colors[6], 
+                       nearest_neighbor=colors[3],
+                       worst=colors[6], 
                        prev_sol=colors[4],
                        reg_k0=colors[3],
                        reg_k2=colors[0],
@@ -44,6 +45,7 @@ titles_2_colors = dict(cold_start='black',
                     #    obj_k120='gray')
 titles_2_styles = dict(cold_start='-.', 
                        nearest_neighbor='-.', 
+                       worst='-.',
                        prev_sol='-.',
                        reg_k0='-',
                        reg_k2='-',
@@ -64,7 +66,8 @@ titles_2_styles = dict(cold_start='-.',
                        obj_k60='-')
                     #    obj_k120='-')
 titles_2_markers = dict(cold_start='v', 
-                       nearest_neighbor='<', 
+                        nearest_neighbor='^',
+                       worst='<', 
                        prev_sol='^',
                        reg_k0='>',
                        reg_k2='o',
@@ -184,9 +187,11 @@ def construct_worst(z_star_max, steps, lin_conv_rate):
     return worst
 
 
-def get_worse_indices(z_star_max, steps, acc, lin_conv_rate):
+def get_worse_indices(z_star_max, steps, acc, lin_conv_rate, custom_loss=False):
     worst = construct_worst(z_star_max, steps, lin_conv_rate)
     worst_case_indices = worst < acc
+    if custom_loss:
+        worst_case_indices = worst < -100
     return worst_case_indices
 
 
@@ -211,7 +216,16 @@ def risk_plots(example, cfg):
         eval_iters = int(cfg.get('worst_case_iters', cfg.eval_iters))
     else:
         eval_iters = cfg.eval_iters
-    cold_start_results, guarantee_results = get_frac_solved_data_classical(example, cfg)
+    if example == 'quadcopter':
+        cold_start_results, guarantee_results, aux_results = get_frac_solved_data_classical_aux(example, cfg)
+    else:
+        cold_start_results, guarantee_results = get_frac_solved_data_classical(example, cfg)
+        aux_results = None
+
+    # if example == 'quadcopter':
+    #     train = False
+    #     col = 'no_train'
+    #     aux_results = get_percentiles(example, cfg, cfg.cold_start_percentile_datetime, train, col, percentiles)
 
     cold_start_size = cold_start_results[-1].size
     steps = get_steps(cold_start_size, eval_iters, cfg.worst_case)
@@ -221,6 +235,7 @@ def risk_plots(example, cfg):
 
     acc_list, bounds_list_list = [], []
     cold_start_list, worst_list = [], []
+    aux_quantile_list = []
 
     for i in range(len(accuracies)):
         acc = accuracies[i]
@@ -228,11 +243,19 @@ def risk_plots(example, cfg):
             lin_conv_rate = 0.99995
         elif example == 'robust_kalman':
             lin_conv_rate = 1.0
-        worst_case_indices = get_worse_indices(z_star_max, steps, acc, lin_conv_rate)
+        else:
+            lin_conv_rate = 1.0
+        worst_case_indices = get_worse_indices(z_star_max, steps, acc, lin_conv_rate, custom_loss=cfg.custom_loss)
         if cfg.worst_case:
             cold_start_curve = construct_full_curve(cold_start_results[i], steps, worst_case_indices)
         else:
             cold_start_curve = cold_start_results[i][:eval_iters]
+
+        if aux_results is not None:
+            aux_quantile = aux_results[i][:eval_iters]
+        else:
+            aux_quantile = None
+        aux_quantile_list.append(aux_quantile)
 
         if cfg.worst_case:
             worst_case_curve = np.zeros(steps.size)
@@ -259,11 +282,12 @@ def risk_plots(example, cfg):
             cold_start_list.append(cold_start_curve)
             worst_list.append(worst_case_curve)
     plot_final_classical_risk_bounds_together(example, acc_list, steps, bounds_list_list, cold_start_list,
-                                     worst_list, cfg.worst_case, cfg.custom_loss)
+                                     worst_list, cfg.worst_case, cfg.custom_loss, aux_quantile_list=aux_quantile_list)
+
 
 
 def plot_final_classical_risk_bounds_together(example, acc_list, steps, bounds_list_list, cold_start_list,
-                                     worst_list, worst_case, custom_loss):
+                                     worst_list, worst_case, custom_loss, aux_quantile_list=None):
     markers = ['o', 's', '>', 'D'] #['o', 's', '<', 'D']
     cmap = plt.cm.Set1
     colors = cmap.colors
@@ -299,12 +323,24 @@ def plot_final_classical_risk_bounds_together(example, acc_list, steps, bounds_l
                     linewidth=2.0,
                     markevery=(0.05, 0.1)
                     )
-        if worst_case:
+        if aux_quantile_list is not None and aux_quantile_list[0] is not None:
+            aux_quantile = aux_quantile_list[k]
+            axes[loc].plot(aux_quantile, 
+                        color=titles_2_colors['cold_start'], 
+                        linestyle=titles_2_styles['cold_start'],
+                        marker=titles_2_markers['cold_start'],
+                        markevery=(0.05, 0.1))
+            axes[loc].plot(cold_start, 
+                        color=titles_2_colors['nearest_neighbor'], 
+                        linestyle=titles_2_styles['nearest_neighbor'],
+                        marker=titles_2_markers['nearest_neighbor'],
+                        markevery=(0.05, 0.1))
+        if worst_case and not custom_loss:
             axes[loc].plot(steps,
                         worst, 
-                        linestyle=titles_2_styles['nearest_neighbor'], 
-                        color=titles_2_colors['nearest_neighbor'],
-                        marker=titles_2_markers['nearest_neighbor'],
+                        linestyle=titles_2_styles['worst'], 
+                        color=titles_2_colors['worst'],
+                        marker=titles_2_markers['worst'],
                         linewidth=2.0,
                         markevery=(0.05, 0.1)
                         )
@@ -419,10 +455,21 @@ def percentile_plots(example, cfg):
 
     cold_start_results, guarantee_results = get_frac_solved_data_classical(example, cfg)
     # percentile_results = get_percentiles(example, cfg)
-    train = True
-    col = 'no_train'
+    if example == 'quadcopter':
+        train = False
+        col = 'nearest_neighbor'
+    else:
+        train = True
+        col = 'no_train'
     percentiles = cfg.get('percentiles', [30, 90, 99])
     percentile_results = get_percentiles(example, cfg, cfg.percentile_datetime, train, col, percentiles)
+
+    if example == 'quadcopter':
+        train = False
+        col = 'no_train'
+        aux_results = get_percentiles(example, cfg, cfg.cold_start_percentile_datetime, train, col, percentiles)
+    else:
+        aux_results = None
 
     steps1 = np.arange(cold_start_results[-1].size)[:eval_iters]
     z_star_max, theta_max = get_worst_case_datetime(example, cfg)
@@ -438,6 +485,8 @@ def percentile_plots(example, cfg):
         lin_conv_rate = 0.99995
     elif example == 'robust_kalman':
         lin_conv_rate = 1.0
+    else:
+        lin_conv_rate = 1.0
     worst = construct_worst(z_star_max, steps1, lin_conv_rate)
 
     steps = get_steps(steps1.size, cfg.worst_case_iters, worst_case=True)
@@ -445,6 +494,7 @@ def percentile_plots(example, cfg):
 
     cold_start_quantile_list, worst_list = [], []
     worst_full_list = []
+    aux_quantile_list = []
     bounds_list_list, plot_bool_list_list = [], []
     
     for i in range(len(percentiles)):
@@ -460,26 +510,33 @@ def percentile_plots(example, cfg):
                 plot_bool_list.append(True)
         correct_index = corrected_indices[i]
         cold_start_quantile = percentile_results[correct_index][:eval_iters]
+        if aux_results is not None:
+            aux_quantile = aux_results[correct_index][:eval_iters]
+        else:
+            aux_quantile = None
         
         percentile_final_plots(percentile, cold_start_quantile, worst, 
                             bounds_list, cfg.custom_loss, plot_bool_list, 
-                            cfg.percentile_ylabel)
+                            cfg.get('percentile_ylabel', 'fixed-point residual'))
         cold_start_quantile_list.append(cold_start_quantile)
         worst_list.append(worst)
         worst_full_list.append(worst_full)
         bounds_list_list.append(bounds_list)
         plot_bool_list_list.append(plot_bool_list)
+        aux_quantile_list.append(aux_quantile)
     percentile_final_plots_together(example, percentiles, cold_start_quantile_list, worst_list, 
-                            bounds_list_list, cfg.custom_loss, plot_bool_list_list)
+                            bounds_list_list, cfg.custom_loss, plot_bool_list_list, 
+                            aux_quantile_list=aux_quantile_list)
     create_tables_classical(example, steps, percentiles, cold_start_quantile_list, 
-                            worst_full_list, bounds_list_list, cfg.custom_loss)
+                            worst_full_list, bounds_list_list, cfg.custom_loss, 
+                            aux_quantile_list=aux_quantile_list)
 
 
 
 
 
 def percentile_final_plots_together(example, percentiles, cold_start_quantile_list, worst_list, 
-                            bounds_list_list, custom_loss, plot_bool_list_list):
+                            bounds_list_list, custom_loss, plot_bool_list_list, aux_quantile_list=None):
     markers = ['o', 's', '>', 'D'] #['o', 's', '<', 'D']
     cmap = plt.cm.Set1
     colors = cmap.colors
@@ -515,20 +572,41 @@ def percentile_final_plots_together(example, percentiles, cold_start_quantile_li
                 axes[loc].plot(curr, color=colors[j], marker=markers[j], 
                             alpha=0.6, markevery=(0.00 + offsets[j], 0.1))
                 
-        axes[loc].plot(cold_start_quantile, 
-                    titles_2_colors['cold_start'], 
-                    linestyle=titles_2_styles['cold_start'],
-                    marker=titles_2_markers['cold_start'],
-                    markevery=(0.05, 0.1))
+        if aux_quantile_list is not None and aux_quantile_list[0] is not None:
+            aux_quantile = aux_quantile_list[k]
+            # print('aux_quantile', aux_quantile)
+            # print('cold start_quantile', cold_start_quantile)
+            # flip the colors
+            axes[loc].plot(aux_quantile, 
+                        color=titles_2_colors['cold_start'], 
+                        linestyle=titles_2_styles['cold_start'],
+                        marker=titles_2_markers['cold_start'],
+                        markevery=(0.05, 0.1))
+            axes[loc].plot(cold_start_quantile, 
+                        color=titles_2_colors['nearest_neighbor'], 
+                        linestyle=titles_2_styles['nearest_neighbor'],
+                        marker=titles_2_markers['nearest_neighbor'],
+                        markevery=(0.05, 0.1))
+        else:
+            if example == 'mnist' and custom_loss:
+                cold_start_quantile = np.clip(cold_start_quantile, a_max=0, a_min=-1000)
+            axes[loc].plot(cold_start_quantile, 
+                        color=titles_2_colors['cold_start'], 
+                        linestyle=titles_2_styles['cold_start'],
+                        marker=titles_2_markers['cold_start'],
+                        markevery=(0.05, 0.1))
+            
 
         # plot the worst case
         if not custom_loss:
             axes[loc].plot(worst, 
-                        color=titles_2_colors['nearest_neighbor'], 
-                        linestyle=titles_2_styles['nearest_neighbor'],
-                        marker=titles_2_markers['nearest_neighbor'],
+                        color=titles_2_colors['worst'], 
+                        linestyle=titles_2_styles['worst'],
+                        marker=titles_2_markers['worst'],
                         markevery=(0.05, 0.1)
                         )
+            
+
         if cold_start_quantile.min() > 0:
             axes[k].set_yscale('log')
         if example == 'mnist':
@@ -867,7 +945,7 @@ def get_ylabel_percentile(example, custom_loss):
 
 
 def create_tables_classical(example, steps, percentiles, cold_start_quantile_list, 
-                            worst_list, bounds_list_list, custom_loss):
+                            worst_list, bounds_list_list, custom_loss, aux_quantile_list=None):
     num_N = len(bounds_list_list)
     num_samples = [10, 100, 1000]
     if custom_loss and example == 'mnist':
@@ -878,12 +956,12 @@ def create_tables_classical(example, steps, percentiles, cold_start_quantile_lis
         tols = np.array([0.01, 0.001, 0.0001])
     else:
         tols = np.array([0.01, 0.001, 0.0001])
-    # algo = 'l2ws'
     for i in range(len(percentiles)):
         curr_df = pd.DataFrame()
         quantile = percentiles[i]
 
         cold_start_vals = np.zeros(tols.size)
+        nearest_neighbor_vals = np.zeros(tols.size)
         worst_vals = np.zeros(tols.size)
         # curr_emp_vals = np.zeros(tols.size)
         # curr_bound_vals = np.zeros(tols.size)
@@ -895,6 +973,9 @@ def create_tables_classical(example, steps, percentiles, cold_start_quantile_lis
         for j in range(tols.size):
             cold_start_vals[j] = get_cutoff_tol(cold_start_curve, tols[j])
 
+            if example == 'quadcopter':
+                nearest_neighbor_vals[j] = get_cutoff_tol(aux_quantile_list[i], tols[j])
+
             worst_cutoff = get_cutoff_tol(worst_curve, tols[j])
             print('worst_cutoff', worst_cutoff)
             print('steps', steps)
@@ -903,17 +984,19 @@ def create_tables_classical(example, steps, percentiles, cold_start_quantile_lis
 
             # iterate over the bounds
             
-            # curr_emp_vals[j] = get_cutoff_tol(emp_list_list[i][0], tols[j])
             for k in range(num_N):
                 samples_curve_list[k][j] = get_cutoff_tol(bounds_list_list[i][k], tols[j])
         curr_df['tol'] = tols
-        curr_df['cold_start'] = cold_start_vals.astype(int)
+
+        if example == 'quadcopter':
+            curr_df['cold_start'] = nearest_neighbor_vals.astype(int)
+            curr_df['nearest_neighbor'] = cold_start_vals.astype(int)
+        else:
+            curr_df['cold_start'] = cold_start_vals.astype(int)
         if not custom_loss:
             curr_df['worst'] = worst_vals.astype(int)
         for k in range(num_N):
             curr_df[f"samples_{num_samples[k]}"] = samples_curve_list[k].astype(int)
-        # curr_df[f"{algo}_emp"] = curr_emp_vals.astype(int)
-        # curr_df[f"{algo}_bound"] = curr_bound_vals.astype(int)
 
         curr_df.to_csv(f"quantiles_{quantile}.csv")
 
@@ -1303,7 +1386,7 @@ def plot_final_learned_risk_bounds_together(example, plot_acc_list, steps, bound
         for j in range(num_bounds):
             # plot empirical results
             emp_vals = emp_list[j][emp_list[j].size-1] * np.ones(steps.size)
-            emp_vals[:emp_list[j].size] = emp_list[j]
+            emp_vals[:emp_list[j].size] = emp_list[j][:steps.size]
             axes[loc].plot(steps, emp_vals, 
                             color=colors[j], 
                             markerfacecolor='none',
@@ -1320,7 +1403,7 @@ def plot_final_learned_risk_bounds_together(example, plot_acc_list, steps, bound
             #     val = bounds_list[j][bounds_list[j].size-1]
             val = bounds_list[j][bounds_list[j].size-1]
             bound = val * np.ones(steps.size)
-            bound[:bounds_list[j].size] = bounds_list[j]
+            bound[:bounds_list[j].size] = bounds_list[j][:steps.size]
             axes[loc].plot(steps, bound, 
                             color=colors[j], 
                             # alpha=0.6,
@@ -1570,9 +1653,10 @@ def mnist_plot_eval_iters(cfg):
 def quadcopter_plot_eval_iters(cfg):
     example = 'quadcopter'
     # plot_eval_iters(example, cfg, train=False)
-    overlay_training_losses(example, cfg)
+    # overlay_training_losses(example, cfg)
     # plot_eval_iters(example, cfg, train=False)
-    create_journal_results(example, cfg, train=False)
+    # create_journal_results(example, cfg, train=False)
+    create_classical_results(example, cfg)
 
 
 
@@ -1797,17 +1881,59 @@ def get_frac_solved_data_classical(example, cfg):
 
     accuracies = get_accs(cfg)
     for acc in accuracies:
-        curr_cold_start_results = load_frac_solved(example, cold_start_datetimes[-1], acc, train=True, 
-                                                    title='no_train')
+        cold_title = 'nearest_neighbor' if example == 'quadcopter' else 'no_train'
+        train = example != 'quadcopter'
+        curr_cold_start_results = load_frac_solved(example, cold_start_datetimes[-1], acc, train=train, 
+                                                    title=cold_title)
         cold_start_results.append(curr_cold_start_results)
         curr_guarantee_results = []
         for datetime in cold_start_datetimes:
-            single_guarantee_results = load_frac_solved(example, datetime, acc, train=True, 
-                                                        title='no_train_pac_bayes')
+            # guarantee_title = 'nearest_neighbor_pac_bayes' if example == 'quadcopter' else 'no_train'
+            guarantee_title = cold_title + '_pac_bayes'
+            single_guarantee_results = load_frac_solved(example, datetime, acc, train=train, 
+                                                        title=guarantee_title)
             curr_guarantee_results.append(single_guarantee_results)
         guarantee_results.append(curr_guarantee_results)
 
     return cold_start_results, guarantee_results
+
+
+def get_frac_solved_data_classical_aux(example, cfg):
+    # setup
+    cold_start_datetimes = cfg.cold_start_datetimes
+
+    aux_datetime = cfg.cold_start_datetime
+    
+    cold_start_results = []
+    guarantee_results = []
+    aux_results = []
+
+    accuracies = get_accs(cfg)
+    for acc in accuracies:
+        # base
+        cold_title = 'nearest_neighbor' if example == 'quadcopter' else 'no_train'
+        train = example != 'quadcopter'
+        curr_cold_start_results = load_frac_solved(example, cold_start_datetimes[-1], acc, train=train, 
+                                                    title=cold_title)
+        cold_start_results.append(curr_cold_start_results)
+        
+        # aux
+        if example == 'quadcopter':
+            curr_aux_results = load_frac_solved(example, aux_datetime, acc, train=False, 
+                                                        title='no_train')
+            aux_results.append(curr_aux_results)
+
+        curr_guarantee_results = []
+        for datetime in cold_start_datetimes:
+            # guarantee_title = 'nearest_neighbor_pac_bayes' if example == 'quadcopter' else 'no_train'
+            guarantee_title = cold_title + '_pac_bayes'
+            single_guarantee_results = load_frac_solved(example, datetime, acc, train=train, 
+                                                        title=guarantee_title)
+            curr_guarantee_results.append(single_guarantee_results)
+        guarantee_results.append(curr_guarantee_results)
+
+    return cold_start_results, guarantee_results, aux_results
+
 
 
 def get_frac_solved_data(example, cfg):
