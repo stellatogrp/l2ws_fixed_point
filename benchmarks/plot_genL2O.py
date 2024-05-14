@@ -114,6 +114,7 @@ def sparse_coding_plot_eval_iters(cfg):
 
 
 def create_classical_results(example, cfg):
+    worst_case_gap_plot(example, cfg)
     metrics, timing_data, titles = get_all_data(example, cfg, train=False)
     eval_iters = int(cfg.eval_iters)
 
@@ -136,7 +137,7 @@ def create_classical_results(example, cfg):
 
     percentile_plots(example, cfg)
     risk_plots(example, cfg)
-    worst_case_gap_plot(example, cfg)
+    
 
 
 def worst_case_gap_plot(example, cfg):
@@ -145,26 +146,48 @@ def worst_case_gap_plot(example, cfg):
     # get the cold start results
     metrics, timing_data, titles = get_all_data(example, cfg, train=False)
     cold_start = metrics[0][0]
-    plt.plot(cold_start, linestyle=titles_2_styles['cold_start'], 
-                 color=titles_2_colors['cold_start'],
-                 marker=titles_2_markers['cold_start'],
-                 markevery=0.1)
+    
 
     # get the worst case results
     z_star_max, theta_max = get_worst_case_datetime(example, cfg)
     steps = np.arange(cold_start.size)
     worst_case = z_star_max / np.sqrt((steps + 2) / np.exp(1))
-    plt.plot(worst_case, linestyle=titles_2_styles['nearest_neighbor'], 
+    plt.plot(worst_case, label='Theoretical worst-case bound',
+             linestyle=titles_2_styles['worst'], 
+                 color=titles_2_colors['worst'],
+                 marker=titles_2_markers['worst'],
+                 markevery=0.1)
+    
+    plt.plot(cold_start, label='Sample average',
+             linestyle=titles_2_styles['cold_start'], 
+                 color=titles_2_colors['cold_start'],
+                 marker=titles_2_markers['cold_start'],
+                 markevery=0.1)
+    
+    cold_start_results, guarantee_results = get_frac_solved_data_classical(example, cfg)
+    # percentile_results = get_percentiles(example, cfg)
+    train = True
+    col = 'no_train'
+    percentiles = cfg.get('percentiles', [30, 90, 99])
+    percentile_results = get_percentiles(example, cfg, cfg.percentile_datetime, train, col, percentiles)
+
+    cold_start_quantile = percentile_results[2][:8000]
+    print('cold_start_quantile', cold_start_quantile)
+    plt.plot(cold_start_quantile, label='Sample 99th quantile',
+             linestyle=titles_2_styles['nearest_neighbor'], 
                  color=titles_2_colors['nearest_neighbor'],
                  marker=titles_2_markers['nearest_neighbor'],
                  markevery=0.1)
 
     # plt.tight_layout()
+    plt.legend(loc='lower left')
+    plt.xscale('log')
     plt.xlabel('evaluation steps')
     plt.ylabel("fixed-point residual")
     plt.yscale('log')
     plt.savefig('worst_case_analysis_gap.pdf', bbox_inches='tight')
     plt.clf()
+    return
 
 
 
